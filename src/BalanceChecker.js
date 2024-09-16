@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ethers } from "ethers";
+import { BrowserProvider, JsonRpcProvider, isAddress, formatUnits } from 'ethers'; // Ajustado aqui
 import "./style.css"; // Seu estilo existente
 
 const BalanceChecker = () => {
@@ -16,14 +16,14 @@ const BalanceChecker = () => {
 
   const apiUrl = 'https://x8ki-letl-twmt.n7.xano.io/api:wHmUZQ0X/tabela'; // API do banco de dados
 
-  // Provedor de conexão à blockchain (via MetaMask ou Alchemy como fallback)
+  // Provedor de conexão à blockchain (via MetaMask ou fallback para Alchemy)
   let provider;
 
   if (typeof window.ethereum !== 'undefined') {
-    provider = new ethers.providers.Web3Provider(window.ethereum);
+    provider = new BrowserProvider(window.ethereum); // Provedor MetaMask
   } else {
-    provider = new ethers.providers.JsonRpcProvider(
-      "https://flow-testnet.g.alchemy.com/v2/HHHDej4bNKMI7483-w_qt-IZQlUQK80w"
+    provider = new JsonRpcProvider(
+      "https://flow-testnet.g.alchemy.com/v2/HHHDej4bNKMI7483-w_qt-IZQlUQK80w" // Provedor Alchemy
     );
   }
 
@@ -79,8 +79,8 @@ const BalanceChecker = () => {
   // Função para consultar o saldo de FLOW de uma conta
   const getBalance = async (account) => {
     try {
-      const balance = await provider.getBalance(account);
-      const flowBalance = ethers.utils.formatUnits(balance, 18); // FLOW tem 18 decimais
+      const balance = await provider.getBalance(account); // Verifica o saldo
+      const flowBalance = formatUnits(balance, 18); // FLOW tem 18 decimais
       setBalances((prevBalances) => ({
         ...prevBalances,
         [account]: parseFloat(flowBalance).toFixed(2),
@@ -120,7 +120,7 @@ const BalanceChecker = () => {
   // Adiciona um novo endereço manualmente e consulta o saldo
   const addAddress = () => {
     const normalizedAddress = newAddress.toLowerCase(); // Normaliza para minúsculas
-    if (ethers.utils.isAddress(normalizedAddress)) {
+    if (isAddress(normalizedAddress)) {
       if (!accounts.includes(normalizedAddress)) {
         setAccounts((prevAccounts) => [...prevAccounts, normalizedAddress]);
         getBalance(normalizedAddress); // Consultar o saldo do novo endereço
