@@ -1,180 +1,150 @@
 import React, { useState, useEffect } from "react";
-import { BrowserProvider, JsonRpcProvider, isAddress, formatUnits } from 'ethers'; // Ajustado aqui
+import { BrowserProvider, JsonRpcProvider, isAddress, formatUnits } from 'ethers'; 
 import "./style.css"; // Seu estilo existente
 
 const BalanceChecker = () => {
-  const [accounts, setAccounts] = useState([]); // Armazena todas as contas conectadas
-  const [balances, setBalances] = useState({}); // Armazena os saldos de todas as contas
-  const [sortedAccounts, setSortedAccounts] = useState([]); // Armazena contas ordenadas
-  const [sortDirection, setSortDirection] = useState('desc'); // Direção de ordenação
-  const [newAddress, setNewAddress] = useState(''); // Armazena o endereço manual
-  const [copiedAddress, setCopiedAddress] = useState(''); // Armazena o endereço copiado
+  const [accounts, setAccounts] = useState([]); // Contas conectadas
+  const [balances, setBalances] = useState({}); // Saldos de todas as contas
+  const [sortedAccounts, setSortedAccounts] = useState([]); // Contas ordenadas
+  const [sortDirection, setSortDirection] = useState('desc'); // Direção da ordenação
+  const [newAddress, setNewAddress] = useState(''); // Novo endereço manual
+  const [copiedAddress, setCopiedAddress] = useState(''); // Endereço copiado
   const [searchTerm, setSearchTerm] = useState(''); // Termo de busca
-  const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState(""); // Armazena as mensagens de erro
-  const [duplicateAddressError, setDuplicateAddressError] = useState(false); // Controle do erro de duplicata
+  const [isConnected, setIsConnected] = useState(false); // Status de conexão
+  const [error, setError] = useState(""); // Erros gerais
+  const [duplicateAddressError, setDuplicateAddressError] = useState(false); // Endereço duplicado
 
   const apiUrl = 'https://x8ki-letl-twmt.n7.xano.io/api:wHmUZQ0X/tabela'; // API do banco de dados
+  const provider = typeof window.ethereum !== 'undefined'
+    ? new BrowserProvider(window.ethereum) // Provedor MetaMask
+    : new JsonRpcProvider("https://flow-testnet.g.alchemy.com/v2/dRr8neFMosh3bQrQHLKzjyHLUpdeX7bK"); // Provedor Alchemy
 
-  // Provedor de conexão à blockchain (via MetaMask ou fallback para Alchemy)
-  let provider;
-
-  if (typeof window.ethereum !== 'undefined') {
-    provider = new BrowserProvider(window.ethereum); // Provedor MetaMask
-  } else {
-    provider = new JsonRpcProvider(
-      "https://flow-testnet.g.alchemy.com/v2/HHHDej4bNKMI7483-w_qt-IZQlUQK80w" // Provedor Alchemy
-    );
-  }
-
-  // Função para conectar ao MetaMask e obter as contas conectadas
+  // Função para conectar ao MetaMask e buscar contas
   const connectMetaMask = async () => {
     try {
       const accountsList = await window.ethereum.request({ method: "eth_requestAccounts" });
-      if (accountsList.length > 0) {
-        const normalizedAccounts = accountsList.map(account => account.toLowerCase()); // Normaliza as contas
-        setAccounts((prevAccounts) => [...new Set([...prevAccounts, ...normalizedAccounts])]); // Evita duplicatas
-        setIsConnected(true);
-        setError("");
+      const normalizedAccounts = accountsList.map(account => account.toLowerCase());
+      setAccounts(prev => [...new Set([...prev, ...normalizedAccounts])]); // Evita duplicatas
+      setIsConnected(true);
+      setError("");
 
-        // Checa e adiciona contas ao banco de dados
-        for (const account of normalizedAccounts) {
-          await checkAndAddAddress(account);
-          getBalance(account); // Consultar saldo da conta conectada
-        }
+      for (const account of normalizedAccounts) {
+        await checkAndAddAddress(account); // Adicionar ao banco de dados se necessário
+        getBalance(account); // Consultar saldo
       }
     } catch (error) {
-      console.error("Erro ao conectar MetaMask:", error);
       setError("Erro ao conectar MetaMask");
+      console.error(error);
     }
   };
 
-  // Função para verificar se o endereço já existe no BD e adicionar se necessário
+  // Função para verificar e adicionar endereço ao banco de dados
   const checkAndAddAddress = async (address) => {
     try {
       const response = await fetch(apiUrl);
       const addresses = await response.json();
 
-      // Normalizar todos os endereços do banco para minúsculas para comparação
-      const addressExists = addresses.some((item) => item.address.toLowerCase() === address);
-
+      const addressExists = addresses.some(item => item.address.toLowerCase() === address);
       if (!addressExists) {
         await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ address })
         });
-        console.log(`Endereço ${address} adicionado ao banco de dados.`);
+        console.log(`Endereço ${address} adicionado.`);
       } else {
-        // Exibe a mensagem de erro por 3 segundos
         setDuplicateAddressError(true);
         setTimeout(() => setDuplicateAddressError(false), 3000);
-        console.log(`Endereço ${address} já existe no banco de dados.`);
+        console.log(`Endereço ${address} já existe.`);
       }
     } catch (error) {
-      console.error("Erro ao verificar/adicionar endereço no banco de dados:", error);
+      setError("Erro ao verificar/adicionar endereço");
+      console.error(error);
     }
   };
 
-  // Função para consultar o saldo de FLOW de uma conta
+  // Função para consultar o saldo de uma conta Flow
   const getBalance = async (account) => {
     try {
-      const balance = await provider.getBalance(account); // Verifica o saldo
-      const flowBalance = formatUnits(balance, 18); // FLOW tem 18 decimais
-      setBalances((prevBalances) => ({
-        ...prevBalances,
-        [account]: parseFloat(flowBalance).toFixed(2),
-      }));
-      setError("");
+      const balance = await provider.getBalance(account); // Consulta o saldo
+      const flowBalance = formatUnits(balance, 18); // Formatação de saldo
+      setBalances(prev => ({ ...prev, [account]: parseFloat(flowBalance).toFixed(2) }));
     } catch (error) {
-      console.error("Erro ao consultar o saldo:", error);
-      setError("Erro ao consultar o saldo");
+      setError("Erro ao consultar saldo");
+      console.error(error);
     }
   };
 
-  // Função para encurtar o endereço Ethereum
-  const shortenAddress = (address) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
-  // Ordena as contas com base no saldo (da maior para a menor ou vice-versa)
+  // Ordena as contas com base no saldo
   const sortAccounts = () => {
     const sorted = [...accounts].sort((a, b) => {
       const balanceA = parseFloat(balances[a]) || 0;
       const balanceB = parseFloat(balances[b]) || 0;
-
       return sortDirection === 'desc' ? balanceB - balanceA : balanceA - balanceB;
     });
     setSortedAccounts(sorted);
-    setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc'); // Alterna a direção da ordenação
+    setSortDirection(sortDirection === 'desc' ? 'asc' : 'desc'); // Alterna a direção
   };
 
-  // Função para buscar endereços
+  // Busca e filtra contas
   const filterAccounts = () => {
-    if (searchTerm === '') {
-      return sortedAccounts;
-    }
-    return sortedAccounts.filter(account => account.includes(searchTerm.toLowerCase()));
+    return searchTerm === '' ? sortedAccounts : sortedAccounts.filter(account => account.includes(searchTerm.toLowerCase()));
   };
 
-  // Adiciona um novo endereço manualmente e consulta o saldo
+  // Adiciona um novo endereço manualmente
   const addAddress = () => {
-    const normalizedAddress = newAddress.toLowerCase(); // Normaliza para minúsculas
+    const normalizedAddress = newAddress.toLowerCase();
     if (isAddress(normalizedAddress)) {
       if (!accounts.includes(normalizedAddress)) {
-        setAccounts((prevAccounts) => [...prevAccounts, normalizedAddress]);
-        getBalance(normalizedAddress); // Consultar o saldo do novo endereço
-        setNewAddress(''); // Limpar o campo de input
+        setAccounts(prev => [...prev, normalizedAddress]);
+        getBalance(normalizedAddress);
+        setNewAddress(''); // Limpa o input
       } else {
         setDuplicateAddressError(true);
         setTimeout(() => setDuplicateAddressError(false), 3000);
       }
     } else {
-      setError("Endereço inválido.");
+      setError("Endereço inválido");
     }
   };
 
-  // Função para remover um endereço
+  // Remove um endereço da lista
   const removeAddress = (addressToRemove) => {
-    setAccounts((prevAccounts) => prevAccounts.filter((account) => account !== addressToRemove));
-    setSortedAccounts((prevSorted) => prevSorted.filter((account) => account !== addressToRemove));
-    const updatedBalances = { ...balances };
-    delete updatedBalances[addressToRemove]; // Remove o saldo associado
-    setBalances(updatedBalances);
+    setAccounts(prev => prev.filter(account => account !== addressToRemove));
+    setSortedAccounts(prev => prev.filter(account => account !== addressToRemove));
+    setBalances(prev => {
+      const updatedBalances = { ...prev };
+      delete updatedBalances[addressToRemove];
+      return updatedBalances;
+    });
   };
 
-  // Função para copiar o endereço para a área de transferência
+  // Copia o endereço para a área de transferência
   const copyAddressToClipboard = (address) => {
     navigator.clipboard.writeText(address);
     setCopiedAddress(address);
-    setTimeout(() => setCopiedAddress(''), 3000); // Remove a mensagem de "copiado" após 3 segundos
+    setTimeout(() => setCopiedAddress(''), 3000);
   };
 
-  // Função para desconectar MetaMask e limpar o estado local
+  // Função para desconectar do MetaMask
   const disconnectMetaMask = () => {
-    setAccounts([]);  // Limpa as contas
-    setBalances({});  // Limpa os saldos
-    setSortedAccounts([]);  // Limpa as contas ordenadas
-    setIsConnected(false);  // Define o estado como desconectado
+    setAccounts([]); // Limpa as contas
+    setBalances({}); // Limpa os saldos
+    setSortedAccounts([]); // Limpa as contas ordenadas
+    setIsConnected(false); // Desconecta
     setError("");
 
-    // Limpar as permissões da carteira MetaMask
-    if (typeof window.ethereum !== "undefined") {
+    if (window.ethereum) {
       window.ethereum.request({
         method: "wallet_requestPermissions",
         params: [{ eth_accounts: {} }],
-      }).then(() => {
-        console.log("Desconectado do MetaMask.");
-      }).catch((error) => {
-        console.error("Erro ao desconectar MetaMask:", error);
-      });
+      }).then(() => console.log("Desconectado"))
+        .catch(error => console.error("Erro ao desconectar MetaMask", error));
     }
   };
 
   useEffect(() => {
-    if (accounts.length > 0) {
-      setSortedAccounts([...accounts]); // Inicializa as contas ordenadas
-    }
+    setSortedAccounts([...accounts]); // Atualiza a lista ordenada sempre que as contas ou saldos mudam
   }, [accounts, balances]);
 
   return (
@@ -185,9 +155,7 @@ const BalanceChecker = () => {
 
       <section className="input-section">
         {!isConnected ? (
-          <>
-            <button onClick={connectMetaMask}>Ver Saldo</button>
-          </>
+          <button onClick={connectMetaMask}>Ver Saldo</button>
         ) : (
           <>
             {duplicateAddressError && (
@@ -230,13 +198,13 @@ const BalanceChecker = () => {
                 {filterAccounts().map((account) => (
                   <tr key={account}>
                     <td>
-                      <span>{shortenAddress(account)}</span>
+                      <span>{account.slice(0, 6)}...{account.slice(-4)}</span>
                       <span onClick={() => copyAddressToClipboard(account)} className="copy-icon">
                         📋
                       </span>
                       {copiedAddress === account && <span className="copied-message">Copiado!</span>}
                     </td>
-                    <td>{balances[account] ? balances[account] : "Carregando..."}</td>
+                    <td>{balances[account] || "Carregando..."}</td>
                     <td>
                       <button onClick={() => removeAddress(account)} className="remove-button">Remover</button>
                     </td>
